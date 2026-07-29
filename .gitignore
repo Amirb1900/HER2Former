@@ -1,1 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
 
+# Virtual environments
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+
+# Logs
+logs/
+*.log
+
+# Outputs
+outputs/
+checkpoints/
+
+# HuggingFace cache
+.cache/
+huggingface/
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Kaggle
+working/
