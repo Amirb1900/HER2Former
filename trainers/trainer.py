@@ -93,6 +93,8 @@ class Trainer:
         print(f"Device          : {self.device}")
         print(f"AMP             : {self.use_amp}")
         print(f"Save Directory  : {self.save_dir}")
+        print(f"Start Epoch     : {self.start_epoch}")
+        print(f"Best Metric     : {self.best_metric:.4f}")
         print("=" * 60)
         
     def train_one_epoch(self, epoch):
@@ -245,13 +247,16 @@ class Trainer:
 
         return epoch_loss, metrics
 
-print(f"Best Metric : {self.best_metric:.4f}")
     def fit(self, num_epochs):
         """
         Main training loop.
         """
 
         print("\nStarting Training...\n")
+
+        print(f"Training starts from Epoch {self.start_epoch + 1}")
+        print(f"Current Best Metric : {self.best_metric:.4f}")
+        print()
 
         for epoch in range(self.start_epoch, num_epochs):
 
