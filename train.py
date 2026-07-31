@@ -4,7 +4,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from configs.config import Config
 
-from HER2Former.datasets.dataloader import create_dataloaders
+from datasets.dataloader import create_dataloaders
 
 from models.her2former import HER2Former
 
@@ -35,8 +35,8 @@ def main():
     # DataLoader
     # ======================================================
 
-    train_loader, val_loader, test_loader = get_dataloaders(
-        config.dataset
+    train_loader, val_loader, test_loader = create_dataloaders(
+    config
     )
 
     print("DataLoaders Loaded.")
