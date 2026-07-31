@@ -24,7 +24,13 @@ class Virchow2Encoder(nn.Module):
             mlp_layer=SwiGLUPacked,
             act_layer=torch.nn.SiLU,
         )
+# ==========================================================
+# Gradient Checkpointing
+# ==========================================================
 
+if hasattr(self.backbone, "set_grad_checkpointing"):
+    self.backbone.set_grad_checkpointing(True)
+    print("Gradient Checkpointing Enabled.")
         if freeze_backbone:
             print("Freezing Virchow2 backbone...")
             for param in self.backbone.parameters():
