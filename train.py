@@ -4,7 +4,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from configs.config import Config
 
-from datasets.dataloader import get_dataloaders
+from HER2Former.datasets.dataloader import create_dataloaders
 
 from models.her2former import HER2Former
 
