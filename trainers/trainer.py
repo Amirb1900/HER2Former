@@ -222,11 +222,11 @@ class Trainer:
                 )
 
                 all_labels.extend(
-                    labels.cpu().numpy()
+                labels.detach().cpu().numpy()
                 )
 
                 all_predictions.extend(
-                    predictions.cpu().numpy()
+                predictions.detach().cpu().numpy()
                 )
 
                 progress_bar.set_postfix(
@@ -245,7 +245,7 @@ class Trainer:
 
         return epoch_loss, metrics
 
-
+print(f"Best Metric : {self.best_metric:.4f}")
     def fit(self, num_epochs):
         """
         Main training loop.
