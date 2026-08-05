@@ -102,7 +102,7 @@ model = HER2Former(
 
 checkpoint = torch.load(
     CHECKPOINT,
-    map_location=DEVICE,
+    map_location="cpu",
     weights_only=False
 )
 
