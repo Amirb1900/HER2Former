@@ -62,13 +62,13 @@ class Virchow2Encoder(nn.Module):
         # Gradient Checkpointing
         # ==========================================================
 
-        if hasattr(self.backbone, "set_grad_checkpointing"):
+        #if hasattr(self.backbone, "set_grad_checkpointing"):
 
-            self.backbone.set_grad_checkpointing(True)
+            #self.backbone.set_grad_checkpointing(True)
 
-            print(
-                "Gradient Checkpointing Enabled."
-            )
+            #print(
+                #"Gradient Checkpointing Enabled."
+            #)
 
 
         # ==========================================================
