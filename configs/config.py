@@ -50,7 +50,7 @@ class ModelConfig:
 
 @dataclass
 class TrainingConfig:
-    batch_size: int = 8
+    batch_size: int = 16
 
     epochs: int = 50
 
