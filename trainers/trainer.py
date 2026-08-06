@@ -402,20 +402,8 @@ class Trainer:
 
 
             # Scheduler
-
             if self.scheduler is not None:
-
-                try:
-
-                    self.scheduler.step(
-                        val_metrics["qwk"]
-                    )
-
-                except TypeError:
-
-                    self.scheduler.step()
-
-
+                self.scheduler.step()
 
             # Logging
 
