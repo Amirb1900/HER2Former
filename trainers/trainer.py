@@ -38,7 +38,7 @@ class Trainer:
         save_dir="./outputs",
         max_grad_norm=1.0,
         use_amp=True,
-        early_stop_patience=9,
+        early_stop_patience=15,
     ):
 
         self.model = model.to(device)
