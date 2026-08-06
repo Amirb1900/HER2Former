@@ -1,8 +1,8 @@
 
 from torch.utils.data import DataLoader
 
-from HER2Former.datasets.dataset import HER2Dataset
-from HER2Former.datasets.transforms import (
+from her2_data.dataset import her2_data
+from her2_data.transforms import (
     build_train_transforms,
     build_val_transforms,
     build_test_transforms,
