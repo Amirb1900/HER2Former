@@ -1,13 +1,12 @@
-
 from torch.utils.data import DataLoader
 
-from her2_data.dataset import her2_data
+from her2_data.dataset import HER2Dataset
+
 from her2_data.transforms import (
     build_train_transforms,
     build_val_transforms,
     build_test_transforms,
 )
-
 
 def create_dataloaders(cfg):
     """
