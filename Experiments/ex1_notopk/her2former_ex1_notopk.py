@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from models.virchow2 import Virchow2Encoder
 
-from Experiment.ex1_notopk.fusion_ex1_notopk import (
+from Experiments.ex1_notopk.fusion_ex1_notopk import (
     CrossAttentionFusionEx1NoTopK
 )
 
