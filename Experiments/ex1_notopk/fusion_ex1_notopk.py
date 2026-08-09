@@ -196,4 +196,3 @@ class CrossAttentionFusionEx1NoTopK(nn.Module):
         # [B, 1280]
 
         return fused, attn_weights
-```
