@@ -196,4 +196,3 @@ class HER2FormerEx1NoTopK(nn.Module):
             }
 
         return logits
-```
