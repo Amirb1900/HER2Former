@@ -58,9 +58,7 @@ def main():
     # ======================================================
 
     checkpoint_path = (
-        "/kaggle/working/HER2Former/"
-        "outputs/experiments/ex1_notopk/"
-        "checkpoints/best_model.pth"
+        "/kaggle/working/ex1_notopk_best_model.pth"
     )
 
     print("Loading checkpoint:")
