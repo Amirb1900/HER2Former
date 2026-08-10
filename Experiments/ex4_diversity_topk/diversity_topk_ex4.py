@@ -8,34 +8,37 @@ class DiversityAwareTopKEx4(nn.Module):
     Diversity-Aware Top-K Token Selector
     Experiment 4
 
-    Purpose
-    -------
-    Select K patch tokens that are:
+    This module is a controlled modification of the
+    standard TopKSelector used in Experiment 2.
 
-        1. Highly relevant
-        2. Diverse
-        3. Less redundant
+    Experiment 2:
+        score = Linear(token)
+        select Top-K based on relevance
+
+    Experiment 4:
+        score = Linear(token)
+        select Top-K using:
+
+            relevance - diversity penalty
+
+    The relevance scorer is intentionally identical
+    to the baseline TopKSelector.
 
     Input
     -----
     patch_tokens:
-        [B, N, D]
-
-        B = batch size
-        N = number of patch tokens (256)
-        D = embedding dimension (1280)
+        [B, N, C]
 
     Output
     ------
     selected_tokens:
-        [B, K, D]
+        [B, K, C]
 
     selected_scores:
-        [B, K]
+        [B, N]
 
     selected_indices:
         [B, K]
-
     """
 
     def __init__(
@@ -46,166 +49,119 @@ class DiversityAwareTopKEx4(nn.Module):
     ):
         super().__init__()
 
-        self.embed_dim = embed_dim
         self.top_k = top_k
+
         self.diversity_weight = diversity_weight
 
-        # --------------------------------------------------
-        # Learnable relevance scorer
-        # --------------------------------------------------
+        # ==================================================
+        # IMPORTANT:
+        # Same scorer as EXP2
+        # ==================================================
 
-        self.score_layer = nn.Sequential(
-            nn.LayerNorm(embed_dim),
-
-            nn.Linear(
-                embed_dim,
-                embed_dim // 4
-            ),
-
-            nn.GELU(),
-
-            nn.Linear(
-                embed_dim // 4,
-                1
-            )
+        self.score_layer = nn.Linear(
+            embed_dim,
+            1
         )
 
-    def forward(self, patch_tokens):
+    def forward(
+        self,
+        patch_tokens
+    ):
         """
         Parameters
         ----------
         patch_tokens:
-            [B, N, D]
+            [B, N, C]
 
         Returns
         -------
         selected_tokens:
-            [B, K, D]
+            [B, K, C]
 
-        selected_scores:
-            [B, K]
+        scores:
+            [B, N]
 
         selected_indices:
             [B, K]
         """
 
-        B, N, D = patch_tokens.shape
+        B, N, C = patch_tokens.shape
 
         # ==================================================
-        # 1. Relevance Score
+        # 1. Relevance Scores
         # ==================================================
 
-        relevance_scores = self.score_layer(
+        scores = self.score_layer(
             patch_tokens
         ).squeeze(-1)
 
         # [B, N]
 
-        # Normalize scores
-
-        relevance_scores = torch.sigmoid(
-            relevance_scores
-        )
-
         # ==================================================
-        # 2. Initial candidate selection
-        # ==================================================
-
-        candidate_k = min(
-            self.top_k * 2,
-            N
-        )
-
-        candidate_scores, candidate_indices = torch.topk(
-            relevance_scores,
-            k=candidate_k,
-            dim=1
-        )
-
-        # ==================================================
-        # 3. Candidate tokens
-        # ==================================================
-
-        candidate_tokens = torch.gather(
-            patch_tokens,
-            1,
-            candidate_indices.unsqueeze(-1).expand(
-                -1,
-                -1,
-                D
-            )
-        )
-
-        # ==================================================
-        # 4. Normalize token representations
+        # 2. Normalize token representations
         # ==================================================
 
         normalized_tokens = F.normalize(
-            candidate_tokens,
+            patch_tokens,
             p=2,
             dim=-1
         )
 
+        # [B, N, C]
+
         # ==================================================
-        # 5. Diversity-aware greedy selection
+        # 3. Diversity-Aware Greedy Selection
         # ==================================================
 
-        selected_indices = []
-
-        selected_token_indices = []
+        batch_selected_indices = []
 
         for b in range(B):
 
-            selected = []
-
-            remaining = torch.arange(
-                candidate_k,
-                device=patch_tokens.device
-            )
-
+            # --------------------------------------------------
             # First token:
-            # choose highest relevance
+            # highest relevance
+            # --------------------------------------------------
 
-            first_idx = torch.argmax(
-                candidate_scores[b]
-            ).item()
-
-            selected.append(
-                first_idx
+            first_index = torch.argmax(
+                scores[b]
             )
 
-            remaining = remaining[
-                remaining != first_idx
+            selected = [
+                first_index
             ]
 
             # --------------------------------------------------
-            # Greedy diversity-aware selection
+            # Iteratively select remaining K-1 tokens
             # --------------------------------------------------
 
-            while len(selected) < self.top_k:
+            for _ in range(
+                1,
+                self.top_k
+            ):
 
-                selected_tensor = torch.tensor(
-                    selected,
-                    device=patch_tokens.device,
-                    dtype=torch.long
+                selected_tensor = torch.stack(
+                    selected
                 )
 
+                # [S, C]
                 selected_features = normalized_tokens[
                     b,
                     selected_tensor
                 ]
 
-                remaining_features = normalized_tokens[
-                    b,
-                    remaining
-                ]
-
-                # Similarity to already selected tokens
+                # --------------------------------------------------
+                # Similarity between all tokens and selected tokens
+                # --------------------------------------------------
 
                 similarity = torch.matmul(
-                    remaining_features,
-                    selected_features.transpose(0, 1)
+                    normalized_tokens[b],
+                    selected_features.transpose(
+                        0,
+                        1
+                    )
                 )
+
+                # [N, S]
 
                 max_similarity = similarity.max(
                     dim=1
@@ -215,91 +171,80 @@ class DiversityAwareTopKEx4(nn.Module):
                 # Diversity-aware score
                 # --------------------------------------------------
 
-                relevance = candidate_scores[
-                    b,
-                    remaining
-                ]
-
-                final_score = (
-                    relevance
+                diversity_score = (
+                    scores[b]
                     -
                     self.diversity_weight *
                     max_similarity
                 )
 
-                best_position = torch.argmax(
-                    final_score
-                )
+                # --------------------------------------------------
+                # Prevent already selected tokens
+                # from being selected again
+                # --------------------------------------------------
 
-                best_candidate = remaining[
-                    best_position
-                ].item()
+                diversity_score[
+                    selected_tensor
+                ] = -float("inf")
+
+                # --------------------------------------------------
+                # Select next token
+                # --------------------------------------------------
+
+                next_index = torch.argmax(
+                    diversity_score
+                )
 
                 selected.append(
-                    best_candidate
+                    next_index
                 )
 
-                remaining = remaining[
-                    remaining != best_candidate
-                ]
+            # --------------------------------------------------
+            # Stack selected indices
+            # --------------------------------------------------
 
-            selected_tensor = torch.tensor(
-                selected,
-                device=patch_tokens.device,
-                dtype=torch.long
+            selected = torch.stack(
+                selected
             )
 
-            selected_token_indices.append(
-                selected_tensor
+            batch_selected_indices.append(
+                selected
             )
 
         # ==================================================
-        # Stack selected candidate indices
+        # 4. Final indices
         # ==================================================
 
-        selected_token_indices = torch.stack(
-            selected_token_indices,
-            dim=0
+        selected_indices = torch.stack(
+            batch_selected_indices
         )
 
         # [B, K]
 
         # ==================================================
-        # Convert candidate indices → original token indices
+        # 5. Gather selected tokens
         # ==================================================
 
-        selected_indices = torch.gather(
-            candidate_indices,
-            1,
-            selected_token_indices
-        )
-
-        # ==================================================
-        # Gather final tokens
-        # ==================================================
-
-        selected_tokens = torch.gather(
-            patch_tokens,
-            1,
-            selected_indices.unsqueeze(-1).expand(
+        gather_index = (
+            selected_indices
+            .unsqueeze(-1)
+            .expand(
                 -1,
                 -1,
-                D
+                C
             )
         )
 
-        # ==================================================
-        # Gather final relevance scores
-        # ==================================================
-
-        selected_scores = torch.gather(
-            relevance_scores,
-            1,
-            selected_indices
+        selected_tokens = torch.gather(
+            patch_tokens,
+            dim=1,
+            index=gather_index
         )
+
+        # [B, K, C]
 
         return (
             selected_tokens,
-            selected_scores,
+            scores,
             selected_indices
         )
