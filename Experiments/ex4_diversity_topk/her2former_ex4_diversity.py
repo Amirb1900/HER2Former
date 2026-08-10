@@ -3,8 +3,8 @@ import torch.nn as nn
 
 from models.virchow2 import Virchow2Encoder
 
-from Experiments.ex4_diversity_topk.diversity_topk_ex4 import (
-    DiversityAwareTopKEx4
+from Experiments.ex4_diversity_topk.topk_selector_ex4_diversity import (
+    DiversityAwareTopKSelectorEx4
 )
 
 from modules.ordinal_head import OrdinalRegressionHead
@@ -14,26 +14,46 @@ class HER2FormerEx4Diversity(nn.Module):
     """
     HER2Former - Experiment 4
 
-    Diversity-Aware Top-K Token Routing
+    Differentiable Diversity-Aware Top-K Routing.
 
-    Controlled comparison against Experiment 2.
+    Architecture
+    ------------
 
-    Experiment 2:
-        Virchow2
-            -> Standard Top-K
-            -> Mean Pooling
-            -> CLS Fusion
-            -> CORAL
-
-    Experiment 4:
-        Virchow2
-            -> Diversity-Aware Top-K
-            -> Mean Pooling
-            -> CLS Fusion
-            -> CORAL
-
-    The only architectural change is the token
-    selection strategy.
+        Input Image
+             |
+             v
+        Virchow2 Encoder
+             |
+             v
+        256 Patch Tokens
+             |
+             v
+        Learnable Relevance Scoring
+             |
+             v
+        Diversity Penalty
+             |
+             v
+        Differentiable Top-K
+             |
+             v
+        64-token representation
+             |
+             +----------------+
+             |                |
+             v                v
+          CLS Token       Selected Tokens
+             |                |
+             +-------+--------+
+                     |
+                     v
+                  Fusion
+                     |
+                     v
+             Ordinal Head
+                     |
+                     v
+              HER2 Logits
     """
 
     def __init__(
@@ -42,8 +62,9 @@ class HER2FormerEx4Diversity(nn.Module):
         top_k=64,
         embed_dim=1280,
         num_classes=4,
-        diversity_weight=0.25,
         dropout=0.1,
+        diversity_weight=0.25,
+        temperature=0.5,
     ):
         super().__init__()
 
@@ -59,14 +80,17 @@ class HER2FormerEx4Diversity(nn.Module):
         # Diversity-Aware Top-K
         # ==================================================
 
-        self.token_selector = DiversityAwareTopKEx4(
-            embed_dim=embed_dim,
-            top_k=top_k,
-            diversity_weight=diversity_weight,
+        self.token_selector = (
+            DiversityAwareTopKSelectorEx4(
+                embed_dim=embed_dim,
+                top_k=top_k,
+                diversity_weight=diversity_weight,
+                temperature=temperature,
+            )
         )
 
         # ==================================================
-        # Simple Fusion
+        # Fusion
         # ==================================================
 
         self.fusion_norm = nn.LayerNorm(
@@ -88,19 +112,23 @@ class HER2FormerEx4Diversity(nn.Module):
         )
 
         # ==================================================
-        # Ordinal Regression Head
+        # Ordinal Head
         # ==================================================
 
         self.ordinal_head = OrdinalRegressionHead(
             embed_dim=embed_dim,
             num_classes=num_classes,
-            dropout=dropout
+            dropout=dropout,
         )
+
+    # ======================================================
+    # Forward
+    # ======================================================
 
     def forward(
         self,
         x,
-        return_attention=False
+        return_attention=False,
     ):
 
         # ==================================================
@@ -111,46 +139,34 @@ class HER2FormerEx4Diversity(nn.Module):
             self.encoder(x)
         )
 
-        # patch_tokens:
-        # [B, 256, 1280]
-
         # ==================================================
-        # Diversity-Aware Top-K
+        # Diversity-Aware Routing
         # ==================================================
 
-        selected_tokens, token_scores, token_indices = (
-            self.token_selector(
-                patch_tokens
-            )
+        (
+            selected_tokens,
+            pooled_tokens,
+            token_scores,
+            token_indices,
+            selection_weights,
+        ) = self.token_selector(
+            patch_tokens
         )
 
-        # selected_tokens:
-        # [B, 64, 1280]
-
         # ==================================================
-        # Mean Pooling
+        # Normalize
         # ==================================================
-
-        pooled_tokens = selected_tokens.mean(
-            dim=1
-        )
-
-        # [B, 1280]
-
-        # ==================================================
-        # Normalization
-        # ==================================================
-
-        pooled_tokens = self.fusion_norm(
-            pooled_tokens
-        )
 
         cls_token = self.fusion_norm(
             cls_token
         )
 
+        pooled_tokens = self.fusion_norm(
+            pooled_tokens
+        )
+
         # ==================================================
-        # CLS + Patch Representation
+        # Global + Local Fusion
         # ==================================================
 
         fused_feature = torch.cat(
@@ -161,30 +177,20 @@ class HER2FormerEx4Diversity(nn.Module):
             dim=-1
         )
 
-        # [B, 2560]
-
-        # ==================================================
-        # Projection
-        # ==================================================
-
         fused_feature = self.fusion_projection(
             fused_feature
         )
 
-        # [B, 1280]
-
         # ==================================================
-        # CORAL Ordinal Head
+        # Ordinal Prediction
         # ==================================================
 
         logits = self.ordinal_head(
             fused_feature
         )
 
-        # [B, 3]
-
         # ==================================================
-        # Optional Debug Output
+        # Optional outputs
         # ==================================================
 
         if return_attention:
@@ -193,6 +199,7 @@ class HER2FormerEx4Diversity(nn.Module):
                 "logits": logits,
                 "token_scores": token_scores,
                 "token_indices": token_indices,
+                "selection_weights": selection_weights,
             }
 
         return logits
