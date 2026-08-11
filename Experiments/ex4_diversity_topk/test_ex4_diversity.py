@@ -1,4 +1,3 @@
-```python
 import torch
 from sklearn.metrics import classification_report
 
@@ -217,5 +216,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
